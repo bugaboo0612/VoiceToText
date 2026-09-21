@@ -7,6 +7,7 @@ import requests
 import sounddevice as sd
 
 from voicetocode import autostart, hotkey, settings
+from voicetocode.recognizer import AVAILABLE_MODELS
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +53,15 @@ def _list_ollama_models() -> list[str]:
 class SettingsWindow:
     """Одно окно настроек, создаётся один раз и переиспользуется (show/hide)."""
 
-    def __init__(self, root: tk.Tk, app_settings: dict, hotkey_listener, recorder, on_saved) -> None:
+    def __init__(
+        self, root: tk.Tk, app_settings: dict, hotkey_listener, recorder, on_saved, on_recognition_model_changed
+    ) -> None:
         self.root = root
         self.app_settings = app_settings
         self.hotkey_listener = hotkey_listener
         self.recorder = recorder
         self.on_saved = on_saved
+        self.on_recognition_model_changed = on_recognition_model_changed
 
         self.window: tk.Toplevel | None = None
         self._capture_listener = None
@@ -130,6 +134,21 @@ class SettingsWindow:
         )
         mic_box.pack(padx=10, pady=6, fill="x")
 
+        # --- Модель распознавания ---
+        recognition_frame = ttk.LabelFrame(self.window, text="Модель распознавания")
+        recognition_frame.pack(fill="x", **pad)
+        self._recognition_labels = list(AVAILABLE_MODELS.values())
+        self._recognition_ids_by_label = {label: model_id for model_id, label in AVAILABLE_MODELS.items()}
+        current_recognition_label = AVAILABLE_MODELS[self.app_settings["recognition_model"]]
+        self.recognition_var = tk.StringVar(value=current_recognition_label)
+        ttk.Combobox(
+            recognition_frame,
+            textvariable=self.recognition_var,
+            values=self._recognition_labels,
+            state="readonly",
+            width=45,
+        ).pack(padx=10, pady=6, fill="x")
+
         # --- Модель Ollama ---
         model_frame = ttk.LabelFrame(self.window, text="Модель Ollama")
         model_frame.pack(fill="x", **pad)
@@ -201,7 +220,14 @@ class SettingsWindow:
         self.app_settings["ollama_model"] = self.model_var.get().strip() or settings.DEFAULTS["ollama_model"]
         self.app_settings["sound_enabled"] = bool(self.sound_var.get())
 
+        new_recognition_model = self._recognition_ids_by_label[self.recognition_var.get()]
+        recognition_model_changed = new_recognition_model != self.app_settings["recognition_model"]
+        self.app_settings["recognition_model"] = new_recognition_model
+
         settings.save(self.app_settings)
+
+        if recognition_model_changed:
+            self.on_recognition_model_changed(new_recognition_model)
 
         want_autostart = bool(self.autostart_var.get())
         if want_autostart != autostart.is_enabled():

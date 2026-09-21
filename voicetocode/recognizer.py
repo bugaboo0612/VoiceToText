@@ -8,24 +8,31 @@ import onnx_asr
 
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "nemo-parakeet-tdt-0.6b-v3"
+DEFAULT_MODEL_NAME = "nemo-parakeet-tdt-0.6b-v3"
+
+# Модели распознавания, из которых можно выбирать в настройках.
+AVAILABLE_MODELS = {
+    "nemo-parakeet-tdt-0.6b-v3": "Parakeet (русский + английский, по умолчанию)",
+    "gigaam-v3-e2e-rnnt": "GigaAM v3 (только русский, точнее на чистом русском)",
+}
 
 
 class Recognizer:
     """Держит модель распознавания загруженной в память."""
 
-    def __init__(self) -> None:
+    def __init__(self, model_name: str = DEFAULT_MODEL_NAME) -> None:
         # Подгружает CUDA/cuDNN библиотеки, установленные как pip-пакеты,
         # иначе onnxruntime их не найдёт и молча перейдёт на процессор.
         ort.preload_dlls()
         ort.set_default_logger_severity(3)  # только ошибки, без технического шума
 
+        self.model_name = model_name
         self.device = "GPU"
         try:
             model = onnx_asr.load_model(
-                MODEL_NAME, providers=["CUDAExecutionProvider"]
+                model_name, providers=["CUDAExecutionProvider"]
             )
-            logger.info("Модель распознавания загружена на видеокарту")
+            logger.info("Модель распознавания (%s) загружена на видеокарту", model_name)
         except Exception:
             logger.warning(
                 "Не удалось загрузить модель на видеокарту, переходим на процессор",
@@ -33,7 +40,7 @@ class Recognizer:
             )
             self.device = "CPU"
             model = onnx_asr.load_model(
-                MODEL_NAME, providers=["CPUExecutionProvider"]
+                model_name, providers=["CPUExecutionProvider"]
             )
 
         # VAD (детектор голоса) режет длинную запись на куски по паузам:

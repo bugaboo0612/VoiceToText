@@ -2,6 +2,7 @@
 import ctypes
 import logging
 import sys
+import threading
 import tkinter as tk
 import winsound
 
@@ -77,6 +78,23 @@ def on_mode_change(mode: str) -> None:
     hotkey_listener.mode = mode
 
 
+def on_recognition_model_changed(model_name: str) -> None:
+    def reload_in_background() -> None:
+        global recognizer
+        tray.set_state("processing")
+        logger.info("Загружаю новую модель распознавания: %s", model_name)
+        try:
+            new_recognizer = Recognizer(model_name)
+        except Exception:
+            logger.exception("Не удалось загрузить новую модель распознавания, оставляю прежнюю")
+        else:
+            recognizer = new_recognizer
+            logger.info("Новая модель распознавания готова (%s)", recognizer.device)
+        tray.set_state("idle")
+
+    threading.Thread(target=reload_in_background, daemon=True).start()
+
+
 def on_settings_saved() -> None:
     logger.info("Настройки сохранены: %s", app_settings)
     tray.refresh_menu()
@@ -119,7 +137,7 @@ def main() -> None:
     history.ensure_file()
 
     print("Загружаю модель распознавания (в первый раз она скачается)...")
-    recognizer = Recognizer()
+    recognizer = Recognizer(app_settings["recognition_model"])
     print(f"Модель загружена ({recognizer.device}).")
 
     print("Прогреваю модель редактуры в Ollama...")
@@ -136,7 +154,9 @@ def main() -> None:
     root = tk.Tk()
     root.withdraw()
 
-    settings_window = SettingsWindow(root, app_settings, hotkey_listener, recorder, on_settings_saved)
+    settings_window = SettingsWindow(
+        root, app_settings, hotkey_listener, recorder, on_settings_saved, on_recognition_model_changed
+    )
 
     tray = Tray(
         app_settings,

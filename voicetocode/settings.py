@@ -5,6 +5,8 @@ import os
 import threading
 from pathlib import Path
 
+from voicetocode.recognizer import AVAILABLE_MODELS, DEFAULT_MODEL_NAME
+
 logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(os.environ["APPDATA"]) / "VoiceToCode"
@@ -17,6 +19,7 @@ DEFAULTS = {
     "microphone": None,  # название микрофона (по нему заново ищется устройство) или None
     "ollama_model": "qwen3:8b",
     "sound_enabled": True,
+    "recognition_model": DEFAULT_MODEL_NAME,
 }
 
 VALID_HOTKEY_MODES = ("hold", "toggle")
@@ -54,6 +57,8 @@ def load() -> dict:
         settings["ollama_model"] = DEFAULTS["ollama_model"]
     if not isinstance(settings.get("sound_enabled"), bool):
         settings["sound_enabled"] = DEFAULTS["sound_enabled"]
+    if settings.get("recognition_model") not in AVAILABLE_MODELS:
+        settings["recognition_model"] = DEFAULTS["recognition_model"]
 
     return settings
 
