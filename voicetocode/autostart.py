@@ -10,7 +10,8 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 RUN_BAT = PROJECT_DIR / "run.bat"
 
 _REGISTRY_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-_VALUE_NAME = "VoiceToCode"
+_VALUE_NAME = "VoiceToText"
+_OLD_VALUE_NAME = "VoiceToCode"  # старое название приложения
 
 
 def is_enabled() -> bool:
@@ -42,3 +43,19 @@ def disable() -> bool:
     except OSError:
         logger.warning("Не удалось выключить автозапуск", exc_info=True)
         return False
+
+
+def migrate_old_name() -> None:
+    """Если автозапуск был включён под старым названием приложения — переносит на новое."""
+    access = winreg.KEY_QUERY_VALUE | winreg.KEY_SET_VALUE
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REGISTRY_KEY, 0, access) as key:
+            try:
+                winreg.QueryValueEx(key, _OLD_VALUE_NAME)
+            except FileNotFoundError:
+                return
+            winreg.DeleteValue(key, _OLD_VALUE_NAME)
+            winreg.SetValueEx(key, _VALUE_NAME, 0, winreg.REG_SZ, f'"{RUN_BAT}"')
+        logger.info("Автозапуск перенесён на новое название приложения")
+    except OSError:
+        logger.warning("Не удалось перенести автозапуск на новое название", exc_info=True)

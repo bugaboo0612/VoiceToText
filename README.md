@@ -1,4 +1,4 @@
-# VoiceToCode
+# VoiceToText
 
 Нажимаете горячую клавишу, говорите — в то место, где стоит курсор (Блокнот, браузер, Claude Code, что угодно), вставляется очищенный текст. Всё работает на вашем компьютере — голос и текст никуда не отправляются в интернет.
 
@@ -18,8 +18,8 @@
 **Дальше — в PowerShell**, в папке, куда хотите поставить программу:
 
 ```powershell
-git clone https://github.com/bugaboo0612/VoiceToCode.git
-cd VoiceToCode
+git clone https://github.com/bugaboo0612/VoiceToText.git
+cd VoiceToText
 py -3.14 -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 ollama pull qwen3:8b
@@ -30,9 +30,9 @@ ollama pull qwen3:8b
 **Ярлык на рабочем столе** (необязательно, но удобно) — выполните ещё это, поправив путь на свой:
 
 ```powershell
-$s = (New-Object -ComObject WScript.Shell).CreateShortcut("$env:USERPROFILE\Desktop\VoiceToCode.lnk")
-$s.TargetPath = "C:\путь\до\папки\VoiceToCode\run.bat"
-$s.WorkingDirectory = "C:\путь\до\папки\VoiceToCode"
+$s = (New-Object -ComObject WScript.Shell).CreateShortcut("$env:USERPROFILE\Desktop\VoiceToText.lnk")
+$s.TargetPath = "C:\путь\до\папки\VoiceToText\run.bat"
+$s.WorkingDirectory = "C:\путь\до\папки\VoiceToText"
 $s.Save()
 ```
 
@@ -40,7 +40,7 @@ $s.Save()
 
 ## Как запустить
 
-Дважды щёлкните по ярлыку **VoiceToCode** на рабочем столе.
+Дважды щёлкните по ярлыку **VoiceToText** на рабочем столе.
 
 Появится значок в трее (у часов, в правом нижнем углу экрана — может быть спрятан под стрелочкой «Показать скрытые значки»):
 
@@ -91,13 +91,13 @@ $s.Save()
 Значит, она уже работает — посмотрите значок в трее, вторая копия не нужна.
 
 **Ничего не помогло.**
-Откройте через меню значка «Открыть папку данных» и посмотрите файл `voicetocode.log` — там подробно записано, что происходило и на чём возникла ошибка. Можно показать этот файл тому, кто помогает с программой (например, Claude Code).
+Откройте через меню значка «Открыть папку данных» и посмотрите файл `voicetotext.log` — там подробно записано, что происходило и на чём возникла ошибка. Можно показать этот файл тому, кто помогает с программой (например, Claude Code).
 
 ## Где что хранится
 
-Все ваши данные — в папке `%APPDATA%\VoiceToCode`:
+Все ваши данные — в папке `%APPDATA%\VoiceToText`:
 
 - `settings.json` — настройки;
 - `dictionary.txt` — словарь замен;
 - `history.txt` — история диктовок;
-- `voicetocode.log` — журнал работы и ошибок.
+- `voicetotext.log` — журнал работы и ошибок.

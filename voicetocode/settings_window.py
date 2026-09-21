@@ -84,7 +84,7 @@ class SettingsWindow:
 
     def _build_window(self) -> None:
         self.window = tk.Toplevel(self.root)
-        self.window.title("VoiceToCode — настройки")
+        self.window.title("VoiceToText — настройки")
         self.window.resizable(False, False)
         self.window.protocol("WM_DELETE_WINDOW", self._close)
 
@@ -196,7 +196,7 @@ class SettingsWindow:
         self.hotkey_button.configure(state="normal")
         if main_vk is None:
             messagebox.showwarning(
-                "VoiceToCode", "Нужно нажать хотя бы одну обычную клавишу (не только Ctrl/Alt/Shift)."
+                "VoiceToText", "Нужно нажать хотя бы одну обычную клавишу (не только Ctrl/Alt/Shift)."
             )
             self.hotkey_label.configure(text=hotkey.combo_name(self._captured_modifiers, self._captured_main_vk))
             return
@@ -205,7 +205,7 @@ class SettingsWindow:
 
     def _save(self) -> None:
         if self._capture_listener is not None:
-            messagebox.showinfo("VoiceToCode", "Сначала закончите смену горячей клавиши.")
+            messagebox.showinfo("VoiceToText", "Сначала закончите смену горячей клавиши.")
             return
 
         mic_choice = self.mic_var.get()
@@ -233,7 +233,7 @@ class SettingsWindow:
         if want_autostart != autostart.is_enabled():
             ok = autostart.enable() if want_autostart else autostart.disable()
             if not ok:
-                messagebox.showwarning("VoiceToCode", "Не удалось изменить автозапуск с Windows.")
+                messagebox.showwarning("VoiceToText", "Не удалось изменить автозапуск с Windows.")
 
         self.hotkey_listener.mode = self.app_settings["hotkey_mode"]
         self.hotkey_listener.set_hotkey(self._captured_modifiers, self._captured_main_vk)
@@ -242,7 +242,7 @@ class SettingsWindow:
         if self.on_saved:
             self.on_saved()
 
-        messagebox.showinfo("VoiceToCode", "Настройки сохранены.")
+        messagebox.showinfo("VoiceToText", "Настройки сохранены.")
         self._close()
 
     def _close(self) -> None:

@@ -54,9 +54,9 @@ class Tray:
         self._on_open_settings = on_open_settings
         self._on_settings_changed = on_settings_changed
         self.icon = pystray.Icon(
-            "VoiceToCode",
+            "VoiceToText",
             _ICONS["idle"],
-            "VoiceToCode — ждёт",
+            "VoiceToText — ждёт",
             menu=self._build_menu(),
         )
 

@@ -9,7 +9,8 @@ from voicetocode.recognizer import AVAILABLE_MODELS, DEFAULT_MODEL_NAME
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = Path(os.environ["APPDATA"]) / "VoiceToCode"
+DATA_DIR = Path(os.environ["APPDATA"]) / "VoiceToText"
+_OLD_DATA_DIR = Path(os.environ["APPDATA"]) / "VoiceToCode"  # старое название приложения
 SETTINGS_FILE = DATA_DIR / "settings.json"
 
 DEFAULTS = {
@@ -29,6 +30,12 @@ _lock = threading.Lock()
 
 
 def ensure_data_dir() -> None:
+    if not DATA_DIR.exists() and _OLD_DATA_DIR.exists():
+        try:
+            _OLD_DATA_DIR.rename(DATA_DIR)
+            logger.info("Перенёс папку данных из %s в %s (приложение переименовано)", _OLD_DATA_DIR, DATA_DIR)
+        except OSError:
+            logger.warning("Не удалось перенести старую папку данных, создаю новую", exc_info=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 

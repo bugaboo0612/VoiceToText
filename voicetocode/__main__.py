@@ -6,7 +6,7 @@ import threading
 import tkinter as tk
 import winsound
 
-from voicetocode import editor, history, hotkey, settings
+from voicetocode import autostart, editor, history, hotkey, settings
 from voicetocode.hotkey import HotkeyListener
 from voicetocode.paster import paste
 from voicetocode.recognizer import Recognizer
@@ -17,7 +17,7 @@ from voicetocode.tray import Tray
 logger = logging.getLogger(__name__)
 
 MIN_DURATION_SEC = 0.3  # короче — считаем случайным нажатием, игнорируем
-_MUTEX_NAME = "VoiceToCode_SingleInstance"
+_MUTEX_NAME = "VoiceToText_SingleInstance"
 _ERROR_ALREADY_EXISTS = 183
 _mutex_handle = None  # держим ссылку, иначе мьютекс освободится сборщиком мусора
 
@@ -112,7 +112,7 @@ def on_exit() -> None:
 
 def setup_logging() -> None:
     settings.ensure_data_dir()
-    log_file = settings.DATA_DIR / "voicetocode.log"
+    log_file = settings.DATA_DIR / "voicetotext.log"
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -125,11 +125,12 @@ def main() -> None:
 
     if not _ensure_single_instance():
         ctypes.windll.user32.MessageBoxW(
-            None, "VoiceToCode уже запущена — смотрите значок в трее.", "VoiceToCode", 0x40
+            None, "VoiceToText уже запущена — смотрите значок в трее.", "VoiceToText", 0x40
         )
         sys.exit(0)
 
     setup_logging()
+    autostart.migrate_old_name()
 
     app_settings = settings.load()
     recorder.device_name = app_settings["microphone"]

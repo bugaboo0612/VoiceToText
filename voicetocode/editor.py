@@ -19,7 +19,7 @@ PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 DICTIONARY_FILE = settings.DATA_DIR / "dictionary.txt"
 DICTIONARY_TEMPLATE = (
-    "# Словарь замен VoiceToCode.\n"
+    "# Словарь замен VoiceToText.\n"
     "# Одна строка - одна замена. Формат: как расслышала модель = как надо написать\n"
     "# Строки, начинающиеся с #, - это комментарии, они игнорируются.\n"
     "#\n"
