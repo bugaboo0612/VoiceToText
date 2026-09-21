@@ -15,3 +15,6 @@ pyperclip>=1.11.0
 # Значок в трее
 pystray>=0.19.5
 Pillow>=12.3.0
+
+# Редактура текста через Ollama
+requests>=2.34.2

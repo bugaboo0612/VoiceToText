@@ -3,7 +3,7 @@ import logging
 import threading
 import winsound
 
-from voicetocode import settings
+from voicetocode import editor, settings
 from voicetocode.hotkey import HotkeyListener
 from voicetocode.paster import paste
 from voicetocode.recognizer import Recognizer
@@ -17,6 +17,7 @@ MIN_DURATION_SEC = 0.3  # короче — считаем случайным н�
 recorder = Recorder()
 recognizer: Recognizer | None = None
 tray: Tray | None = None
+app_settings: dict | None = None
 exit_event = threading.Event()
 
 
@@ -40,8 +41,11 @@ def on_stop() -> None:
         if not text:
             logger.info("Распознавание не дало текста, игнорирую")
             return
-
         logger.info("Распознано: %s", text)
+
+        text = editor.edit(text, app_settings["style"])
+        logger.info("После редактуры: %s", text)
+
         paste(text)
     finally:
         tray.set_state("idle")
@@ -67,20 +71,24 @@ def setup_logging() -> None:
 
 
 def main() -> None:
-    global recognizer, tray, hotkey_listener
+    global recognizer, tray, hotkey_listener, app_settings
 
     setup_logging()
 
-    current_settings = settings.load()
+    app_settings = settings.load()
 
     print("Загружаю модель распознавания (в первый раз она скачается)...")
     recognizer = Recognizer()
-    print(f"Модель загружена ({recognizer.device}). Готово — смотрите на значок в трее.")
+    print(f"Модель загружена ({recognizer.device}).")
 
-    hotkey_listener = HotkeyListener(on_start, on_stop, mode=current_settings["hotkey_mode"])
+    print("Прогреваю модель редактуры в Ollama...")
+    editor.warmup()
+    print("Готово — смотрите на значок в трее.")
+
+    hotkey_listener = HotkeyListener(on_start, on_stop, mode=app_settings["hotkey_mode"])
     hotkey_listener.start()
 
-    tray = Tray(current_settings, on_mode_change=on_mode_change, on_exit=on_exit)
+    tray = Tray(app_settings, on_mode_change=on_mode_change, on_exit=on_exit)
     tray.run_detached()
 
     exit_event.wait()
