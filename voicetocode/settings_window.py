@@ -6,7 +6,7 @@ from tkinter import messagebox, ttk
 import requests
 import sounddevice as sd
 
-from voicetocode import hotkey, settings
+from voicetocode import autostart, hotkey, settings
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +149,12 @@ class SettingsWindow:
             anchor="w", padx=16, pady=6
         )
 
+        # --- Автозапуск ---
+        self.autostart_var = tk.BooleanVar(value=autostart.is_enabled())
+        ttk.Checkbutton(
+            self.window, text="Запускать вместе с Windows", variable=self.autostart_var
+        ).pack(anchor="w", padx=16, pady=(0, 6))
+
         # --- Кнопки ---
         buttons_frame = ttk.Frame(self.window)
         buttons_frame.pack(fill="x", padx=10, pady=10)
@@ -196,6 +202,12 @@ class SettingsWindow:
         self.app_settings["sound_enabled"] = bool(self.sound_var.get())
 
         settings.save(self.app_settings)
+
+        want_autostart = bool(self.autostart_var.get())
+        if want_autostart != autostart.is_enabled():
+            ok = autostart.enable() if want_autostart else autostart.disable()
+            if not ok:
+                messagebox.showwarning("VoiceToCode", "Не удалось изменить автозапуск с Windows.")
 
         self.hotkey_listener.mode = self.app_settings["hotkey_mode"]
         self.hotkey_listener.set_hotkey(self._captured_modifiers, self._captured_main_vk)

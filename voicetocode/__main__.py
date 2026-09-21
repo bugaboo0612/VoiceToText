@@ -1,5 +1,7 @@
 """Точка входа: соединяет запись, распознавание, вставку текста, трей и настройки."""
+import ctypes
 import logging
+import sys
 import tkinter as tk
 import winsound
 
@@ -14,6 +16,17 @@ from voicetocode.tray import Tray
 logger = logging.getLogger(__name__)
 
 MIN_DURATION_SEC = 0.3  # короче — считаем случайным нажатием, игнорируем
+_MUTEX_NAME = "VoiceToCode_SingleInstance"
+_ERROR_ALREADY_EXISTS = 183
+_mutex_handle = None  # держим ссылку, иначе мьютекс освободится сборщиком мусора
+
+
+def _ensure_single_instance() -> bool:
+    """True, если это первая копия программы. Если уже запущена другая — False."""
+    global _mutex_handle
+    _mutex_handle = ctypes.windll.kernel32.CreateMutexW(None, False, _MUTEX_NAME)
+    already_running = ctypes.windll.kernel32.GetLastError() == _ERROR_ALREADY_EXISTS
+    return not already_running
 
 recorder = Recorder()
 recognizer: Recognizer | None = None
@@ -91,6 +104,12 @@ def setup_logging() -> None:
 
 def main() -> None:
     global recognizer, tray, hotkey_listener, app_settings, root, settings_window
+
+    if not _ensure_single_instance():
+        ctypes.windll.user32.MessageBoxW(
+            None, "VoiceToCode уже запущена — смотрите значок в трее.", "VoiceToCode", 0x40
+        )
+        sys.exit(0)
 
     setup_logging()
 
