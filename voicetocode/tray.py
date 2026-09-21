@@ -1,7 +1,6 @@
 """Пульт: значок в трее и его меню."""
 import logging
 import os
-import subprocess
 
 import pystray
 from PIL import Image, ImageDraw
@@ -45,10 +44,14 @@ _ICONS = {
 class Tray:
     """Значок в трее: меняет цвет и хранит меню выбора стиля/режима клавиши."""
 
-    def __init__(self, current_settings: dict, on_mode_change, on_exit) -> None:
+    def __init__(
+        self, current_settings: dict, on_mode_change, on_exit, on_open_settings, on_settings_changed
+    ) -> None:
         self._settings = current_settings
         self._on_mode_change = on_mode_change
         self._on_exit = on_exit
+        self._on_open_settings = on_open_settings
+        self._on_settings_changed = on_settings_changed
         self.icon = pystray.Icon(
             "VoiceToCode",
             _ICONS["idle"],
@@ -78,7 +81,7 @@ class Tray:
         return pystray.Menu(
             pystray.MenuItem("Стиль", pystray.Menu(*style_items)),
             pystray.MenuItem("Режим клавиши", pystray.Menu(*mode_items)),
-            pystray.MenuItem("Настройки…", self._open_settings_file),
+            pystray.MenuItem("Настройки…", self._open_settings),
             pystray.MenuItem("Открыть папку данных", self._open_data_folder),
             pystray.MenuItem("Выход", self._exit),
         )
@@ -87,6 +90,7 @@ class Tray:
         def setter(icon, item) -> None:
             self._settings["style"] = key
             settings.save(self._settings)
+            self._on_settings_changed()
             logger.info("Стиль изменён на: %s", key)
 
         return setter
@@ -99,6 +103,7 @@ class Tray:
             self._settings["hotkey_mode"] = key
             settings.save(self._settings)
             self._on_mode_change(key)
+            self._on_settings_changed()
             logger.info("Режим клавиши изменён на: %s", key)
 
         return setter
@@ -106,10 +111,8 @@ class Tray:
     def _make_mode_checker(self, key: str):
         return lambda item: self._settings["hotkey_mode"] == key
 
-    def _open_settings_file(self, icon, item) -> None:
-        # Настоящее окно настроек появится на Этапе 5, пока — правка файла вручную.
-        settings.ensure_data_dir()
-        subprocess.Popen(["notepad.exe", str(settings.SETTINGS_FILE)])
+    def _open_settings(self, icon, item) -> None:
+        self._on_open_settings()
 
     def _open_data_folder(self, icon, item) -> None:
         settings.ensure_data_dir()
@@ -122,6 +125,10 @@ class Tray:
     def set_state(self, state: str) -> None:
         """state: 'idle' | 'recording' | 'processing'."""
         self.icon.icon = _ICONS[state]
+
+    def refresh_menu(self) -> None:
+        """Перечитать отметки в меню (стиль/режим), если их изменили извне (окно настроек)."""
+        self.icon.update_menu()
 
     def run_detached(self) -> None:
         self.icon.run_detached()

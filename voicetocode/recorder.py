@@ -26,12 +26,30 @@ def record_seconds(duration: float, sample_rate: int = SAMPLE_RATE) -> np.ndarra
 class Recorder:
     """Запись неизвестной заранее длины: start() -> ... -> stop() отдаёт звук."""
 
-    def __init__(self, sample_rate: int = SAMPLE_RATE) -> None:
+    def __init__(self, sample_rate: int = SAMPLE_RATE, device_name: str | None = None) -> None:
         self.sample_rate = sample_rate
+        # Название микрофона, а не индекс: список устройств у sounddevice не
+        # гарантированно стабилен между запусками, поэтому индекс ищем заново
+        # каждый раз перед записью, по имени.
+        self.device_name = device_name
         self._frames: list[np.ndarray] = []
         self._stream: sd.InputStream | None = None
         self._lock = threading.Lock()
         self._started_event = threading.Event()
+
+    def _resolve_device(self) -> int | None:
+        if self.device_name is None:
+            return None
+        try:
+            for index, dev in enumerate(sd.query_devices()):
+                if dev.get("name") == self.device_name and dev.get("max_input_channels", 0) > 0:
+                    return index
+        except Exception:
+            logger.warning("Не удалось получить список микрофонов", exc_info=True)
+        logger.warning(
+            "Микрофон %r из настроек не найден, использую системный по умолчанию", self.device_name
+        )
+        return None
 
     def start(self) -> None:
         self._frames = []
@@ -44,7 +62,11 @@ class Recorder:
                 self._frames.append(indata.copy())
 
         self._stream = sd.InputStream(
-            samplerate=self.sample_rate, channels=1, dtype="float32", callback=callback
+            samplerate=self.sample_rate,
+            channels=1,
+            dtype="float32",
+            device=self._resolve_device(),
+            callback=callback,
         )
         self._stream.start()
         self._started_event.set()

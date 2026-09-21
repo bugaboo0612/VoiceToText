@@ -13,6 +13,10 @@ SETTINGS_FILE = DATA_DIR / "settings.json"
 DEFAULTS = {
     "hotkey_mode": "hold",  # "hold" (удержание) или "toggle" (переключение)
     "style": "normal",  # "raw", "normal", "polite", "professional"
+    "hotkey_vks": [0x78],  # коды клавиш сочетания, по умолчанию одна F9
+    "microphone": None,  # название микрофона (по нему заново ищется устройство) или None
+    "ollama_model": "qwen3:8b",
+    "sound_enabled": True,
 }
 
 VALID_HOTKEY_MODES = ("hold", "toggle")
@@ -41,6 +45,15 @@ def load() -> dict:
         settings["hotkey_mode"] = DEFAULTS["hotkey_mode"]
     if settings.get("style") not in VALID_STYLES:
         settings["style"] = DEFAULTS["style"]
+    hotkey_vks = settings.get("hotkey_vks")
+    if not isinstance(hotkey_vks, list) or not all(isinstance(v, int) for v in hotkey_vks) or not hotkey_vks:
+        settings["hotkey_vks"] = list(DEFAULTS["hotkey_vks"])
+    if not isinstance(settings.get("microphone"), (str, type(None))):
+        settings["microphone"] = DEFAULTS["microphone"]
+    if not isinstance(settings.get("ollama_model"), str) or not settings["ollama_model"]:
+        settings["ollama_model"] = DEFAULTS["ollama_model"]
+    if not isinstance(settings.get("sound_enabled"), bool):
+        settings["sound_enabled"] = DEFAULTS["sound_enabled"]
 
     return settings
 
