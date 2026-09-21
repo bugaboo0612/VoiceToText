@@ -22,7 +22,7 @@ class Recognizer:
 
         self.device = "GPU"
         try:
-            self.model = onnx_asr.load_model(
+            model = onnx_asr.load_model(
                 MODEL_NAME, providers=["CUDAExecutionProvider"]
             )
             logger.info("Модель распознавания загружена на видеокарту")
@@ -32,11 +32,20 @@ class Recognizer:
                 exc_info=True,
             )
             self.device = "CPU"
-            self.model = onnx_asr.load_model(
+            model = onnx_asr.load_model(
                 MODEL_NAME, providers=["CPUExecutionProvider"]
             )
 
+        # VAD (детектор голоса) режет длинную запись на куски по паузам:
+        # модель распознавания за раз принимает не больше 20-30 секунд звука.
+        vad = onnx_asr.load_vad("silero", providers=["CPUExecutionProvider"])
+        self.model = model.with_vad(vad, max_speech_duration_s=20.0)
+
     def recognize(self, waveform: np.ndarray, sample_rate: int = 16000) -> str:
         """Превращает звук (numpy-массив) в текст."""
-        text = self.model.recognize(waveform, sample_rate=sample_rate)
-        return text.strip()
+        parts = [
+            segment.text.strip()
+            for segment in self.model.recognize(waveform, sample_rate=sample_rate)
+            if segment.text.strip()
+        ]
+        return " ".join(parts)
