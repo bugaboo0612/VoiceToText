@@ -1,11 +1,12 @@
 """Пульт: значок в трее и его меню."""
 import logging
 import os
+import subprocess
 
 import pystray
 from PIL import Image, ImageDraw
 
-from voicetocode import settings
+from voicetocode import editor, history, settings
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,8 @@ class Tray:
             pystray.MenuItem("Стиль", pystray.Menu(*style_items)),
             pystray.MenuItem("Режим клавиши", pystray.Menu(*mode_items)),
             pystray.MenuItem("Настройки…", self._open_settings),
+            pystray.MenuItem("Открыть словарь", self._open_dictionary),
+            pystray.MenuItem("Открыть историю", self._open_history),
             pystray.MenuItem("Открыть папку данных", self._open_data_folder),
             pystray.MenuItem("Выход", self._exit),
         )
@@ -113,6 +116,14 @@ class Tray:
 
     def _open_settings(self, icon, item) -> None:
         self._on_open_settings()
+
+    def _open_dictionary(self, icon, item) -> None:
+        editor.ensure_dictionary_file()
+        subprocess.Popen(["notepad.exe", str(editor.DICTIONARY_FILE)])
+
+    def _open_history(self, icon, item) -> None:
+        history.ensure_file()
+        subprocess.Popen(["notepad.exe", str(history.HISTORY_FILE)])
 
     def _open_data_folder(self, icon, item) -> None:
         settings.ensure_data_dir()

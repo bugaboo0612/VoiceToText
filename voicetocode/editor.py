@@ -1,9 +1,11 @@
-"""Редактор: чистка текста и смена стиля через локальную модель в Ollama."""
+"""Редактор: словарь замен, чистка текста и смена стиля через локальную модель в Ollama."""
 import logging
 import re
 from pathlib import Path
 
 import requests
+
+from voicetocode import settings
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +16,16 @@ KEEP_ALIVE = "30m"
 TEMPERATURE = 0.2
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
+
+DICTIONARY_FILE = settings.DATA_DIR / "dictionary.txt"
+DICTIONARY_TEMPLATE = (
+    "# Словарь замен VoiceToCode.\n"
+    "# Одна строка - одна замена. Формат: как расслышала модель = как надо написать\n"
+    "# Строки, начинающиеся с #, - это комментарии, они игнорируются.\n"
+    "#\n"
+    "# Пример (уберите # в начале строки, чтобы замена заработала):\n"
+    "# клод код = Claude Code\n"
+)
 
 STYLE_RAW = "raw"  # без обработки — Ollama не вызывается
 STYLE_FILES = {
@@ -27,6 +39,45 @@ _PREFIX_PATTERNS = [
     r"^исправленный\s+текст\s*:?\s*",
     r"^результат\s*:?\s*",
 ]
+
+
+def ensure_dictionary_file() -> None:
+    """Создаёт пустой словарь с пояснениями, если его ещё нет."""
+    settings.ensure_data_dir()
+    if not DICTIONARY_FILE.exists():
+        try:
+            DICTIONARY_FILE.write_text(DICTIONARY_TEMPLATE, encoding="utf-8")
+        except OSError:
+            logger.warning("Не удалось создать файл словаря", exc_info=True)
+
+
+def _load_dictionary() -> list[tuple[str, str]]:
+    pairs = []
+    if not DICTIONARY_FILE.exists():
+        return pairs
+    try:
+        lines = DICTIONARY_FILE.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        logger.warning("Не удалось прочитать словарь замен", exc_info=True)
+        return pairs
+
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if key and value:
+            pairs.append((key, value))
+    return pairs
+
+
+def apply_dictionary(text: str) -> str:
+    """Заменяет слова/фразы по словарю замен (без учёта регистра, по границам слов)."""
+    for key, value in _load_dictionary():
+        pattern = re.compile(r"(?<!\w)" + re.escape(key) + r"(?!\w)", re.IGNORECASE)
+        text = pattern.sub(value, text)
+    return text
 
 
 def _read_prompt(filename: str) -> str:
@@ -88,8 +139,13 @@ def _looks_like_answer(original: str, edited: str) -> bool:
 
 
 def edit(text: str, style: str, model: str = DEFAULT_MODEL) -> str:
-    """Чистит текст и, если нужно, меняет стиль. При любой проблеме отдаёт исходный текст."""
-    if style == STYLE_RAW or not text:
+    """Словарь замен → чистка и смена стиля через Ollama. При любой проблеме — как можно меньше правок."""
+    if not text:
+        return text
+
+    text = apply_dictionary(text)
+
+    if style == STYLE_RAW:
         return text
 
     raw = _call_ollama(_build_system_prompt(style), text, model)

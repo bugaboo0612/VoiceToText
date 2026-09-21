@@ -3,7 +3,7 @@ import logging
 import tkinter as tk
 import winsound
 
-from voicetocode import editor, hotkey, settings
+from voicetocode import editor, history, hotkey, settings
 from voicetocode.hotkey import HotkeyListener
 from voicetocode.paster import paste
 from voicetocode.recognizer import Recognizer
@@ -45,16 +45,17 @@ def on_stop() -> None:
             logger.info("Слишком короткая запись (%.2f с), игнорирую", duration)
             return
 
-        text = recognizer.recognize(audio)
-        if not text:
+        raw_text = recognizer.recognize(audio)
+        if not raw_text:
             logger.info("Распознавание не дало текста, игнорирую")
             return
-        logger.info("Распознано: %s", text)
+        logger.info("Распознано: %s", raw_text)
 
-        text = editor.edit(text, app_settings["style"], model=app_settings["ollama_model"])
-        logger.info("После редактуры: %s", text)
+        final_text = editor.edit(raw_text, app_settings["style"], model=app_settings["ollama_model"])
+        logger.info("После редактуры: %s", final_text)
 
-        paste(text)
+        paste(final_text)
+        history.add_entry(raw_text, final_text)
     finally:
         tray.set_state("idle")
 
@@ -95,6 +96,8 @@ def main() -> None:
 
     app_settings = settings.load()
     recorder.device_name = app_settings["microphone"]
+    editor.ensure_dictionary_file()
+    history.ensure_file()
 
     print("Загружаю модель распознавания (в первый раз она скачается)...")
     recognizer = Recognizer()
