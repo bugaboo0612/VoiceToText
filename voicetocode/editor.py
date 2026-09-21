@@ -17,6 +17,8 @@ TEMPERATURE = 0.2
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
+# Встроенный словарь (марки разделов документации) лежит в папке проекта, личный — в %APPDATA%
+BASE_DICTIONARY_FILE = Path(__file__).resolve().parent.parent / "dictionary_base.txt"
 DICTIONARY_FILE = settings.DATA_DIR / "dictionary.txt"
 DICTIONARY_TEMPLATE = (
     "# Словарь замен VoiceToText.\n"
@@ -51,14 +53,14 @@ def ensure_dictionary_file() -> None:
             logger.warning("Не удалось создать файл словаря", exc_info=True)
 
 
-def _load_dictionary() -> list[tuple[str, str]]:
+def _read_pairs(path: Path) -> list[tuple[str, str]]:
     pairs = []
-    if not DICTIONARY_FILE.exists():
+    if not path.exists():
         return pairs
     try:
-        lines = DICTIONARY_FILE.read_text(encoding="utf-8").splitlines()
+        lines = path.read_text(encoding="utf-8").splitlines()
     except OSError:
-        logger.warning("Не удалось прочитать словарь замен", exc_info=True)
+        logger.warning("Не удалось прочитать словарь замен: %s", path, exc_info=True)
         return pairs
 
     for line in lines:
@@ -72,11 +74,21 @@ def _load_dictionary() -> list[tuple[str, str]]:
     return pairs
 
 
+def _load_dictionary() -> list[tuple[str, str]]:
+    """Сначала личные замены владельца, потом встроенные — так личные имеют приоритет."""
+    return _read_pairs(DICTIONARY_FILE) + _read_pairs(BASE_DICTIONARY_FILE)
+
+
+def _build_pattern(key: str) -> re.Pattern:
+    """Пробелы и дефисы внутри ключа не важны: "а эр" ловит и "аэр", и "а-эр"."""
+    parts = [re.escape(part) for part in re.split(r"[\s\-]+", key) if part]
+    return re.compile(r"(?<!\w)" + r"[\s\-]*".join(parts) + r"(?!\w)", re.IGNORECASE)
+
+
 def apply_dictionary(text: str) -> str:
     """Заменяет слова/фразы по словарю замен (без учёта регистра, по границам слов)."""
     for key, value in _load_dictionary():
-        pattern = re.compile(r"(?<!\w)" + re.escape(key) + r"(?!\w)", re.IGNORECASE)
-        text = pattern.sub(value, text)
+        text = _build_pattern(key).sub(value.replace("\\", "\\\\"), text)
     return text
 
 
