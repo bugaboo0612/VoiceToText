@@ -1,0 +1,7 @@
+# Распознавание речи (Parakeet). Пакеты для CUDA/cuDNN ставятся первыми,
+# чтобы onnxruntime-gpu подхватил их для видеокарты.
+onnxruntime-gpu[cuda,cudnn]>=1.27
+onnx-asr[gpu,hub]>=0.11.0
+
+# Запись звука с микрофона
+sounddevice>=0.5.1
