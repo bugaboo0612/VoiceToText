@@ -22,7 +22,7 @@ MODE_LABELS = {
     "toggle": "Переключение",
 }
 
-OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"
+OLLAMA_TAGS_URL = "http://127.0.0.1:11434/api/tags"  # не "localhost": на Windows его резолвинг иногда занимает 2+ секунды
 DEFAULT_MIC_LABEL = "Системный по умолчанию"
 
 

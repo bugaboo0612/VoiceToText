@@ -9,7 +9,7 @@ from voicetocode import settings
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_URL = "http://127.0.0.1:11434/api/generate"  # не "localhost": на Windows его резолвинг иногда занимает 2+ секунды
 DEFAULT_MODEL = "qwen3:8b"
 TIMEOUT_SEC = 20
 KEEP_ALIVE = "30m"
