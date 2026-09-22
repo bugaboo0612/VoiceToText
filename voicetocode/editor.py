@@ -97,25 +97,26 @@ def _read_prompt(filename: str) -> str:
 
 
 def _build_system_prompt(style: str) -> str:
-    base = _read_prompt("base.txt")
+    """Инструкция для первого запроса: чистка текста и выбранный стиль."""
+    clean = _read_prompt("clean.txt")
     style_text = _read_prompt(STYLE_FILES[style])
-    return base + "\n\n" + style_text
+    return clean + "\n\n" + style_text
 
 
-def _build_prompt(text: str) -> str:
+def _build_prompt(text: str, reminder_file: str) -> str:
     """Надиктованный текст, а следом краткое напоминание о главных правилах.
 
-    Инструкция в base.txt длинная, и к концу модель часть правил забывает.
-    Последние строки перед ответом она помнит лучше всего - туда и кладём главное.
+    Инструкция длинная, и к концу модель часть правил забывает. Последние
+    строки перед ответом она помнит лучше всего - туда и кладём главное.
     """
-    return f"<text>\n{text}\n</text>\n\n" + _read_prompt("reminder.txt")
+    return f"<text>\n{text}\n</text>\n\n" + _read_prompt(reminder_file)
 
 
-def _call_ollama(system_prompt: str, text: str, model: str) -> str | None:
+def _call_ollama(system_prompt: str, text: str, model: str, reminder_file: str) -> str | None:
     payload = {
         "model": model,
         "system": system_prompt,
-        "prompt": _build_prompt(text),
+        "prompt": _build_prompt(text, reminder_file),
         "think": False,
         "stream": False,
         "keep_alive": KEEP_ALIVE,
@@ -159,8 +160,74 @@ def _looks_like_answer(original: str, edited: str) -> bool:
     return False
 
 
+_WORD_RE = re.compile(r"\S+")
+_EDGE_CHARS = ".,!?;:«»\"'()-—…"
+# Союз в начале нового предложения разрешено убрать: "…лает, и решётка" → "…лает. Решётка"
+_DROPPABLE_WORDS = {"и", "а", "но"}
+
+
+def _words(text: str) -> list[str]:
+    """Слова без знаков по краям. Точки внутри слова остаются: ivan.petrov@gmail.com."""
+    result = []
+    for token in _WORD_RE.findall(text.lower()):
+        token = token.strip(_EDGE_CHARS)
+        if token:
+            result.append(token)
+    return result
+
+
+def only_punctuation_changed(before: str, after: str) -> bool:
+    """Правда, если поменялись только знаки препинания, а слова остались те же.
+
+    Второй запрос должен трогать лишь знаки. Если он подменил слово
+    ("затем" → "тогда"), его результат отбрасывается.
+    """
+    old, new = _words(before), _words(after)
+    i = j = 0
+    while i < len(old) and j < len(new):
+        if old[i] == new[j]:
+            i += 1
+            j += 1
+        elif old[i] in _DROPPABLE_WORDS:
+            i += 1
+        else:
+            return False
+    while i < len(old) and old[i] in _DROPPABLE_WORDS:
+        i += 1
+    return i == len(old) and j == len(new)
+
+
+def _ask(system_prompt: str, text: str, model: str, reminder_file: str) -> str | None:
+    raw = _call_ollama(system_prompt, text, model, reminder_file)
+    if raw is None:
+        return None
+    result = _clean_response(raw)
+    return result or None
+
+
+def _split_sentences(text: str, model: str) -> str:
+    """Второй запрос: делит длинные предложения на простые. Слова не трогает.
+
+    Две попытки: модель иногда подменяет слово, и тогда её ответ не годится.
+    Если не вышло - возвращаем текст после чистки, он уже пригоден для вставки.
+    """
+    system_prompt = _read_prompt("punctuation.txt")
+    for attempt in (1, 2):
+        result = _ask(system_prompt, text, model, "punctuation_reminder.txt")
+        if result is None:
+            return text
+        if only_punctuation_changed(text, result):
+            return result
+        logger.warning(
+            "Запрос про пунктуацию подменил слова (попытка %d), его ответ отброшен: %s",
+            attempt,
+            result,
+        )
+    return text
+
+
 def edit(text: str, style: str, model: str = DEFAULT_MODEL) -> str:
-    """Словарь замен → чистка и смена стиля через Ollama. При любой проблеме — как можно меньше правок."""
+    """Словарь замен → чистка и стиль → пунктуация. При любой проблеме — как можно меньше правок."""
     if not text:
         return text
 
@@ -169,13 +236,8 @@ def edit(text: str, style: str, model: str = DEFAULT_MODEL) -> str:
     if style == STYLE_RAW:
         return text
 
-    raw = _call_ollama(_build_system_prompt(style), text, model)
-    if raw is None:
-        return text
-
-    cleaned = _clean_response(raw)
-
-    if not cleaned:
+    cleaned = _ask(_build_system_prompt(style), text, model, "clean_reminder.txt")
+    if cleaned is None:
         return text
 
     if _looks_like_answer(text, cleaned):
@@ -185,14 +247,16 @@ def edit(text: str, style: str, model: str = DEFAULT_MODEL) -> str:
         )
         return text
 
-    return cleaned
+    return _split_sentences(cleaned, model)
 
 
 def warmup(model: str = DEFAULT_MODEL) -> None:
     """Прогревочный запрос, чтобы модель заранее загрузилась в видеопамять Ollama."""
     logger.info("Прогреваю модель редактуры (%s)...", model)
-    result = _call_ollama(_build_system_prompt("normal"), "это проверочный текст", model)
-    if result is None:
+    # обе инструкции: Ollama запоминает каждую отдельно, прогревать надо тоже обе
+    first = _call_ollama(_build_system_prompt("normal"), "это проверочный текст", model, "clean_reminder.txt")
+    second = _call_ollama(_read_prompt("punctuation.txt"), "это проверочный текст", model, "punctuation_reminder.txt")
+    if first is None or second is None:
         logger.warning("Не удалось прогреть Ollama — возможно, она не запущена")
     else:
         logger.info("Модель редактуры прогрета")
