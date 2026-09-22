@@ -249,10 +249,13 @@ def update_recognition(model_name: str) -> bool:
 
 def check_all(app_settings: dict) -> list[ModelStatus]:
     """Проверяет обе модели: редактуры и распознавания."""
-    return [
+    statuses = [
         check_ollama(app_settings["ollama_model"]),
         check_recognition(app_settings["recognition_model"]),
     ]
+    for status in statuses:
+        logger.info("Проверка обновлений — %s", status.line)
+    return statuses
 
 
 def update(status: ModelStatus) -> bool:
