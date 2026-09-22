@@ -34,6 +34,31 @@ def test_dictionary_does_not_touch_ordinary_words():
     assert editor.apply_dictionary(text) == text
 
 
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("Скинь в телеграм.", "Скинь в Telegram."),
+        ("Открой гитхаб и запусти клод код.", "Открой GitHub и запусти Claude Code."),
+        ("Таблица в эксель, письмо в ворд.", "Таблица в Excel, письмо в Word."),
+        ("Выгрузи из ревит в автокад.", "Выгрузи из Revit в AutoCAD."),
+        ("Спроси у чат джипити.", "Спроси у ChatGPT."),
+        ("Загрузи на гугл диск.", "Загрузи на Google Drive."),
+        ("Позвони по вотсап.", "Позвони по WhatsApp."),
+        ("Напиши на питон.", "Напиши на Python."),
+        ("Проверь эй пи ай.", "Проверь API."),
+        ("Проверь эй-пи-ай.", "Проверь API."),
+    ],
+)
+def test_service_names_from_base_dictionary(raw, expected):
+    # словарь ловит начальную форму; формы с окончаниями исправляет ИИ-редактор
+    assert editor.apply_dictionary(raw) == expected
+
+
+def test_dictionary_does_not_touch_similar_russian_words():
+    text = "Получил телеграмму, поставь курсор в конец строки, погугли это, зумер шумит."
+    assert editor.apply_dictionary(text) == text
+
+
 def test_personal_dictionary_wins(monkeypatch, tmp_path):
     personal = tmp_path / "dictionary.txt"
     personal.write_text("а эр = Артур\n", encoding="utf-8")
