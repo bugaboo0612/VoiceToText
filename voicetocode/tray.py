@@ -46,13 +46,20 @@ class Tray:
     """Значок в трее: меняет цвет и хранит меню выбора стиля/режима клавиши."""
 
     def __init__(
-        self, current_settings: dict, on_mode_change, on_exit, on_open_settings, on_settings_changed
+        self,
+        current_settings: dict,
+        on_mode_change,
+        on_exit,
+        on_open_settings,
+        on_settings_changed,
+        on_check_updates,
     ) -> None:
         self._settings = current_settings
         self._on_mode_change = on_mode_change
         self._on_exit = on_exit
         self._on_open_settings = on_open_settings
         self._on_settings_changed = on_settings_changed
+        self._on_check_updates = on_check_updates
         self.icon = pystray.Icon(
             "VoiceToText",
             _ICONS["idle"],
@@ -83,6 +90,7 @@ class Tray:
             pystray.MenuItem("Стиль", pystray.Menu(*style_items)),
             pystray.MenuItem("Режим клавиши", pystray.Menu(*mode_items)),
             pystray.MenuItem("Настройки…", self._open_settings),
+            pystray.MenuItem("Проверить обновление моделей…", self._check_updates),
             pystray.MenuItem("Открыть словарь", self._open_dictionary),
             pystray.MenuItem("Открыть историю", self._open_history),
             pystray.MenuItem("Открыть папку данных", self._open_data_folder),
@@ -116,6 +124,9 @@ class Tray:
 
     def _open_settings(self, icon, item) -> None:
         self._on_open_settings()
+
+    def _check_updates(self, icon, item) -> None:
+        self._on_check_updates()
 
     def _open_dictionary(self, icon, item) -> None:
         editor.ensure_dictionary_file()

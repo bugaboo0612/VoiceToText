@@ -6,7 +6,7 @@ import threading
 import tkinter as tk
 import winsound
 
-from voicetocode import autostart, editor, history, hotkey, settings
+from voicetocode import autostart, editor, history, hotkey, settings, updates
 from voicetocode.hotkey import HotkeyListener
 from voicetocode.paster import paste
 from voicetocode.recognizer import Recognizer
@@ -18,6 +18,11 @@ logger = logging.getLogger(__name__)
 
 MIN_DURATION_SEC = 0.3  # короче — считаем случайным нажатием, игнорируем
 _MUTEX_NAME = "VoiceToText_SingleInstance"
+# Флаги окон Windows: значок, кнопки, поверх других окон
+_MB_INFO = 0x40 | 0x40000 | 0x10000
+_MB_WARNING = 0x30 | 0x40000 | 0x10000
+_MB_YESNO = 0x4 | 0x20 | 0x40000 | 0x10000
+_ID_YES = 6
 _ERROR_ALREADY_EXISTS = 183
 _mutex_handle = None  # держим ссылку, иначе мьютекс освободится сборщиком мусора
 
@@ -36,6 +41,7 @@ app_settings: dict | None = None
 root: tk.Tk | None = None
 hotkey_listener: HotkeyListener | None = None
 settings_window: SettingsWindow | None = None
+_updates_lock = threading.Lock()  # чтобы не запустить две проверки обновлений сразу
 
 
 def _beep(frequency: int, duration_ms: int) -> None:
@@ -93,6 +99,64 @@ def on_recognition_model_changed(model_name: str) -> None:
         tray.set_state("idle")
 
     threading.Thread(target=reload_in_background, daemon=True).start()
+
+
+def _message_box(text: str, flags: int) -> int:
+    """Окно сообщения средствами Windows: из трея оно надёжно появляется поверх других окон."""
+    return ctypes.windll.user32.MessageBoxW(None, text, "VoiceToText", flags)
+
+
+def on_check_updates() -> None:
+    """Проверка обновлений моделей. Интернет отвечает медленно, поэтому всё в фоновом потоке."""
+    if not _updates_lock.acquire(blocking=False):
+        threading.Thread(
+            target=_message_box, args=("Проверка обновлений уже идёт.", _MB_INFO), daemon=True
+        ).start()
+        return
+    threading.Thread(target=_check_and_update, daemon=True).start()
+
+
+def _check_and_update() -> None:
+    """Проверяет обе модели, показывает отчёт и при согласии владельца скачивает обновления."""
+    try:
+        statuses = updates.check_all(app_settings)
+        report = "\n".join(status.line for status in statuses)
+        to_update = [status for status in statuses if status.state == updates.UPDATE_AVAILABLE]
+
+        if not to_update:
+            _message_box(report, _MB_INFO)
+            return
+
+        question = (
+            report
+            + "\n\nСкачать новые версии сейчас?"
+            + "\nСкачивание пойдёт в фоне, диктовать можно как обычно. Я сообщу, когда оно закончится."
+        )
+        if _message_box(question, _MB_YESNO) != _ID_YES:
+            logger.info("Владелец отказался от обновления моделей")
+            return
+
+        lines, reload_model = [], None
+        for status in to_update:
+            updated = updates.update(status)
+            lines.append(f"{status.title}: {'обновлена' if updated else 'обновить не удалось'}")
+            if updated and status.kind == updates.KIND_RECOGNITION:
+                reload_model = status.name
+
+        message = "\n".join(lines)
+        if reload_model:
+            message += "\n\nЗагружаю обновлённую модель распознавания — это займёт несколько секунд."
+        _message_box(message, _MB_INFO)
+
+        if reload_model:
+            on_recognition_model_changed(reload_model)
+    except Exception:
+        logger.exception("Не удалось проверить или скачать обновления моделей")
+        _message_box(
+            "Не удалось проверить обновления. Подробности — в файле voicetotext.log.", _MB_WARNING
+        )
+    finally:
+        _updates_lock.release()
 
 
 def on_settings_saved() -> None:
@@ -165,6 +229,7 @@ def main() -> None:
         on_exit=on_exit,
         on_open_settings=lambda: root.after(0, settings_window.open),
         on_settings_changed=on_tray_settings_changed,
+        on_check_updates=on_check_updates,
     )
     tray.run_detached()
 
