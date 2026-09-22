@@ -50,27 +50,17 @@ class Recognizer:
     """Держит модель распознавания загруженной в память."""
 
     def __init__(self, model_name: str = DEFAULT_MODEL_NAME) -> None:
-        # Подгружает CUDA/cuDNN библиотеки, установленные как pip-пакеты,
-        # иначе onnxruntime их не найдёт и молча перейдёт на процессор.
-        ort.preload_dlls()
         ort.set_default_logger_severity(3)  # только ошибки, без технического шума
 
         self.model_name = model_name
-        self.device = "GPU"
-        try:
-            model = onnx_asr.load_model(
-                model_name, providers=["CUDAExecutionProvider"]
-            )
-            logger.info("Модель распознавания (%s) загружена на видеокарту", model_name)
-        except Exception:
-            logger.warning(
-                "Не удалось загрузить модель на видеокарту, переходим на процессор",
-                exc_info=True,
-            )
-            self.device = "CPU"
-            model = onnx_asr.load_model(
-                model_name, providers=["CPUExecutionProvider"]
-            )
+        # Распознавание идёт на процессоре, и это осознанный выбор, а не запасной вариант.
+        # На видеокарте onnxruntime резервировал около 3,7 ГБ, из-за чего модели редактуры
+        # не хватало видеопамяти: часть её уезжала в обычную память, и редактура замедлялась
+        # в несколько раз. На процессоре распознавание занимает доли секунды (0,2-0,7 с),
+        # то есть почти столько же, а видеопамять целиком достаётся модели редактуры.
+        self.device = "CPU"
+        model = onnx_asr.load_model(model_name, providers=["CPUExecutionProvider"])
+        logger.info("Модель распознавания (%s) загружена на процессор", model_name)
 
         self.model = model
 
