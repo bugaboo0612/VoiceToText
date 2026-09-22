@@ -102,11 +102,20 @@ def _build_system_prompt(style: str) -> str:
     return base + "\n\n" + style_text
 
 
+def _build_prompt(text: str) -> str:
+    """Надиктованный текст, а следом краткое напоминание о главных правилах.
+
+    Инструкция в base.txt длинная, и к концу модель часть правил забывает.
+    Последние строки перед ответом она помнит лучше всего - туда и кладём главное.
+    """
+    return f"<text>\n{text}\n</text>\n\n" + _read_prompt("reminder.txt")
+
+
 def _call_ollama(system_prompt: str, text: str, model: str) -> str | None:
     payload = {
         "model": model,
         "system": system_prompt,
-        "prompt": f"<text>\n{text}\n</text>",
+        "prompt": _build_prompt(text),
         "think": False,
         "stream": False,
         "keep_alive": KEEP_ALIVE,
