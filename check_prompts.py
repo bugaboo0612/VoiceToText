@@ -19,7 +19,8 @@ PROJECT_DIR = Path(__file__).resolve().parent
 RESULT_FILE = PROJECT_DIR / "check_prompts_result.txt"
 OLD_COMMIT = "34bb572786c448bd1d01932ac07d33062c129ea9"  # последнее «сохранение» с прежними инструкциями (clean.txt + punctuation.txt)
 
-# (что распознала программа, ожидаемый результат уровня 1, ожидаемый результат уровня 2)
+# (что распознала программа, ожидаемый результат уровня 1, ожидаемый результат уровня 2).
+# Если правильных вариантов несколько, они перечислены в скобках через запятую.
 PHRASES = [
     # паразиты, повторы, оговорки
     ("Ну, короче, надо в среду, нет, в четверг созвониться по поводу, типа, релиза.",
@@ -78,19 +79,23 @@ PHRASES = [
      "В разделе ОВ-2 всё в порядке."),
     # грамматика и знаки препинания: уровень 1 их не трогает, уровень 2 исправляет
     ("Надо привести арматуру к понедельнику я думаю что поставщик успеет.",
-     "Надо привести арматуру к понедельнику я думаю что поставщик успеет.",
+     ("Надо привести арматуру к понедельнику я думаю что поставщик успеет.",
+      "Надо привести арматуру к понедельнику, я думаю, что поставщик успеет."),
      "Надо привезти арматуру к понедельнику. Я думаю, что поставщик успеет."),
     ("Чертежи, который прислал проектировщик, надо проверить до среды.",
      "Чертежи, который прислал проектировщик, надо проверить до среды.",
      "Чертежи, которые прислал проектировщик, надо проверить до среды."),
     ("Оплату проведём в течении месяца согласно договора.",
-     "Оплату проведём в течении месяца согласно договора.",
+     ("Оплату проведём в течении месяца согласно договора.",
+      "Оплату проведём в течение месяца согласно договора."),
      "Оплату проведём в течение месяца согласно договору."),
     ("Электрик проверил щиток он сказал что автомат надо менять.",
-     "Электрик проверил щиток он сказал что автомат надо менять.",
+     ("Электрик проверил щиток он сказал что автомат надо менять.",
+      "Электрик проверил щиток, он сказал, что автомат надо менять."),
      "Электрик проверил щиток. Он сказал, что автомат надо менять."),
     ("Если успеем до пятницы то отправим всё заказчику.",
-     "Если успеем до пятницы то отправим всё заказчику.",
+     ("Если успеем до пятницы то отправим всё заказчику.",
+      "Если успеем до пятницы, то отправим всё заказчику."),
      "Если успеем до пятницы, то отправим всё заказчику."),
     ("Я сегодня заехал на объект, там уже привезли плиты, но кран ещё не поставили.",
      "Я сегодня заехал на объект, там уже привезли плиты, но кран ещё не поставили.",
@@ -99,25 +104,34 @@ PHRASES = [
      "Смету пришли мне на почту, а чертежи в Telegram.",
      "Смету пришли мне на почту, а чертежи в Telegram."),
     ("Мне кажется это плохая идея потому что сроки уже горят.",
-     "Мне кажется это плохая идея потому что сроки уже горят.",
+     ("Мне кажется это плохая идея потому что сроки уже горят.",
+      "Мне кажется, это плохая идея, потому что сроки уже горят."),
      "Мне кажется, это плохая идея, потому что сроки уже горят."),
 ]
 
 # Этот код запускается отдельным процессом в папке нужной версии программы:
 # так прежнюю версию можно проверить, не трогая нынешнюю.
 RUNNER = """
-import json, sys, time
+import json, logging, sys, time
 from voicetocode import editor, settings
+
+notes = []  # предупреждения редактора, например "ответ отброшен защитой"
+class Notes(logging.Handler):
+    def emit(self, record):
+        notes.append(record.getMessage())
+logging.getLogger("voicetocode.editor").addHandler(Notes())
+
 job = json.load(sys.stdin)
 model = settings.load()["ollama_model"]
 editor.warmup(model)
 results = []
 for text in job["texts"]:
-    row = []
+    notes.clear()
+    outputs = []
     for style in job["styles"]:
         start = time.perf_counter()
-        row.append([editor.edit(text, style, model=model), time.perf_counter() - start])
-    results.append(row)
+        outputs.append([editor.edit(text, style, model=model), time.perf_counter() - start])
+    results.append({"outputs": outputs, "notes": notes[:]})
     print(".", end="", file=sys.stderr, flush=True)
 print(file=sys.stderr)
 print(json.dumps({"model": model, "results": results}))
@@ -148,8 +162,14 @@ def _run_old(styles: list[str]) -> dict | None:
         return _run(Path(tmp) / "old", styles)
 
 
-def _same(a: str, b: str) -> bool:
-    return " ".join(a.replace("ё", "е").split()) == " ".join(b.replace("ё", "е").split())
+def _variants(expected: str | tuple) -> tuple:
+    return expected if isinstance(expected, tuple) else (expected,)
+
+
+def _same(out: str, expected: str | tuple) -> bool:
+    def norm(text: str) -> str:
+        return " ".join(text.replace("ё", "е").split())
+    return any(norm(out) == norm(variant) for variant in _variants(expected))
 
 
 def _seconds(values: list[float]) -> str:
@@ -170,9 +190,9 @@ def main() -> None:
         print("Проверяю прежние инструкции...")
         old = _run_old(["normal"])
 
-    level1 = [row[0] for row in new["results"]]
-    level2 = [row[1] for row in new["results"]]
-    before = [row[0] for row in old["results"]] if old else None
+    level1 = [row["outputs"][0] for row in new["results"]]
+    level2 = [row["outputs"][1] for row in new["results"]]
+    before = [row["outputs"][0] for row in old["results"]] if old else None
 
     ok1 = sum(_same(out, exp) for (out, _), (_, exp, _) in zip(level1, PHRASES))
     ok2 = sum(_same(out, exp) for (out, _), (_, _, exp) in zip(level2, PHRASES))
@@ -203,7 +223,9 @@ def main() -> None:
             if _same(out, exp):
                 lines.append(f"   {name}: ✓ {out}")
             else:
-                lines += [f"   {name}: ✗ {out}", f"     ожидали:  {exp}"]
+                lines += [f"   {name}: ✗ {out}", f"     ожидали:  {' или '.join(_variants(exp))}"]
+        for note in new["results"][i]["notes"]:
+            lines.append(f"   Заметка:   {note}")
 
     report = "\n".join(lines)
     print("\n" + report)

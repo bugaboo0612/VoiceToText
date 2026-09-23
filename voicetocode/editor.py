@@ -137,6 +137,20 @@ def _clean_response(raw: str) -> str:
     return text
 
 
+# Паразит в самом начале фразы модель иногда пропускает: он написан с заглавной
+# буквы и похож на обычное начало предложения. Такие убираем сами, до Ollama.
+# "Вот" сюда не входит: "Вот, что я думаю" - это не паразит.
+_LEADING_FILLERS_RE = re.compile(
+    r"(^|[.!?]\s+)((?:(?:ну|короче|типа|как бы|это самое|в общем|э-э|м-м)\s*,\s*)+)(\w)",
+    re.IGNORECASE,
+)
+
+
+def _drop_leading_fillers(text: str) -> str:
+    """"Ну, короче, надо…" → "Надо…". Только паразит с запятой в начале предложения."""
+    return _LEADING_FILLERS_RE.sub(lambda m: m.group(1) + m.group(3).upper(), text)
+
+
 def _looks_like_answer(original: str, edited: str) -> bool:
     """Похоже, что модель ответила на текст, а не отредактировала его."""
     if "```" in edited and "```" not in original:
@@ -224,7 +238,10 @@ def _proofread(text: str, model: str) -> str:
 
 
 def edit(text: str, style: str, model: str = DEFAULT_MODEL) -> str:
-    """Словарь замен → уровень 1 (чистка) → уровень 2 (ошибки). При любой проблеме — как можно меньше правок."""
+    """Словарь замен → паразиты в начале фраз → уровень 1 (чистка) → уровень 2 (ошибки).
+
+    При любой проблеме — как можно меньше правок.
+    """
     if not text:
         return text
 
@@ -233,6 +250,7 @@ def edit(text: str, style: str, model: str = DEFAULT_MODEL) -> str:
     if style == STYLE_RAW:
         return text
 
+    text = _drop_leading_fillers(text)
     cleaned = _ask(_read_prompt(LEVEL1_PROMPT), text, model)
     if cleaned is None:
         return text
