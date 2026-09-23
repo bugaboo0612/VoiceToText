@@ -1,12 +1,15 @@
 """Проверка инструкций для редактуры (prompts/level1.txt и level2.txt) на наборе фраз.
 
 Нужна запущенная Ollama. Запуск:
-    .venv\\Scripts\\python check_prompts.py          — нынешние инструкции
-    .venv\\Scripts\\python check_prompts.py --old    — и для сравнения прежние (до Этапа 9)
+    .venv\\Scripts\\python check_prompts.py                     — нынешние инструкции
+    .venv\\Scripts\\python check_prompts.py --old               — и для сравнения прежние (до Этапа 9)
+    .venv\\Scripts\\python check_prompts.py --compare-temperature
+        — сравнение двух настроек "творчества" модели (temperature 0,2 и 0)
 
 Итог печатается на экран и сохраняется в файл check_prompts_result.txt.
 """
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -83,7 +86,9 @@ PHRASES = [
       "Надо привести арматуру к понедельнику, я думаю, что поставщик успеет."),
      "Надо привезти арматуру к понедельнику. Я думаю, что поставщик успеет."),
     ("Чертежи, который прислал проектировщик, надо проверить до среды.",
-     "Чертежи, который прислал проектировщик, надо проверить до среды.",
+     # уровень 1 не обязан чинить грамматику, но если починит - тоже хорошо
+     ("Чертежи, который прислал проектировщик, надо проверить до среды.",
+      "Чертежи, которые прислал проектировщик, надо проверить до среды."),
      "Чертежи, которые прислал проектировщик, надо проверить до среды."),
     ("Оплату проведём в течении месяца согласно договора.",
      ("Оплату проведём в течении месяца согласно договора.",
@@ -112,7 +117,7 @@ PHRASES = [
 # Этот код запускается отдельным процессом в папке нужной версии программы:
 # так прежнюю версию можно проверить, не трогая нынешнюю.
 RUNNER = """
-import json, logging, sys, time
+import json, logging, os, sys, time
 from voicetocode import editor, settings
 
 notes = []  # предупреждения редактора, например "ответ отброшен защитой"
@@ -120,6 +125,9 @@ class Notes(logging.Handler):
     def emit(self, record):
         notes.append(record.getMessage())
 logging.getLogger("voicetocode.editor").addHandler(Notes())
+
+if os.environ.get("VOICETOTEXT_TEMPERATURE"):
+    editor.TEMPERATURE = float(os.environ["VOICETOTEXT_TEMPERATURE"])
 
 job = json.load(sys.stdin)
 model = settings.load()["ollama_model"]
@@ -138,10 +146,14 @@ print(json.dumps({"model": model, "results": results}))
 """
 
 
-def _run(project_dir: Path, styles: list[str]) -> dict:
+def _run(project_dir: Path, styles: list[str], temperature: float | None = None) -> dict:
     job = json.dumps({"texts": [raw for raw, _, _ in PHRASES], "styles": styles})
+    env = os.environ.copy()
+    if temperature is not None:
+        env["VOICETOTEXT_TEMPERATURE"] = str(temperature)
     done = subprocess.run(
-        [sys.executable, "-c", RUNNER], cwd=project_dir, input=job, stdout=subprocess.PIPE, text=True, check=True
+        [sys.executable, "-c", RUNNER],
+        cwd=project_dir, input=job, stdout=subprocess.PIPE, text=True, check=True, env=env,
     )
     return json.loads(done.stdout.strip().splitlines()[-1])
 
@@ -176,11 +188,55 @@ def _seconds(values: list[float]) -> str:
     return f"{sum(values) / len(values):.1f}".replace(".", ",")
 
 
+def _compare_temperature() -> None:
+    """Прогоняет фразы дважды - при temperature 0,2 (как сейчас) и 0 - и показывает, где разница."""
+    print("Проверяю при temperature 0,2 (как сейчас)...")
+    run_02 = _run(PROJECT_DIR, ["level1", "level2"], temperature=0.2)
+    print("Проверяю при temperature 0...")
+    run_00 = _run(PROJECT_DIR, ["level1", "level2"], temperature=0.0)
+
+    labels = ["Уровень 1", "Уровень 2"]
+    lines = [f"Сравнение temperature 0,2 и 0, модель {run_02['model']}", ""]
+    for level_idx, label in enumerate(labels):
+        exp_idx = level_idx + 1  # PHRASES: (сказано, ожидание уровня 1, ожидание уровня 2)
+        out_02 = [row["outputs"][level_idx][0] for row in run_02["results"]]
+        out_00 = [row["outputs"][level_idx][0] for row in run_00["results"]]
+        ok_02 = sum(_same(o, PHRASES[i][exp_idx]) for i, o in enumerate(out_02))
+        ok_00 = sum(_same(o, PHRASES[i][exp_idx]) for i, o in enumerate(out_00))
+        lines.append(f"{label}: при 0,2 совпало {ok_02} из {len(PHRASES)}, при 0 — {ok_00} из {len(PHRASES)}")
+
+    lines += ["", "Различия в ответах (где 0,2 и 0 дали разный текст):"]
+    any_diff = False
+    for level_idx, label in enumerate(labels):
+        for i, (row_02, row_00) in enumerate(zip(run_02["results"], run_00["results"])):
+            out_02 = row_02["outputs"][level_idx][0]
+            out_00 = row_00["outputs"][level_idx][0]
+            if out_02 != out_00:
+                any_diff = True
+                lines += [
+                    "",
+                    f"{label}, фраза {i + 1}: {PHRASES[i][0]}",
+                    f"   При 0,2: {out_02}",
+                    f"   При 0:   {out_00}",
+                ]
+    if not any_diff:
+        lines.append("(различий не нашлось на этих 25 фразах)")
+
+    report = "\n".join(lines)
+    print("\n" + report)
+    RESULT_FILE.write_text(report + "\n", encoding="utf-8")
+    print(f"\nИтог сохранён в файл {RESULT_FILE}")
+
+
 def main() -> None:
     try:
         requests.get("http://127.0.0.1:11434/api/tags", timeout=3).raise_for_status()
     except requests.RequestException:
         print("Ollama не запущена. Запустите её и повторите проверку.")
+        return
+
+    if "--compare-temperature" in sys.argv:
+        _compare_temperature()
         return
 
     print(f"Проверяю нынешние инструкции на {len(PHRASES)} фразах...")
