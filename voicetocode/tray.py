@@ -16,9 +16,8 @@ COLOR_PROCESSING = "#e6c200"  # жёлтый
 
 STYLE_LABELS = {
     "raw": "Без обработки",
-    "normal": "Обычный",
-    "polite": "Вежливый",
-    "professional": "Профессиональный",
+    "level1": "Уровень 1 — Чистка",
+    "level2": "Уровень 2 — Редактор",
 }
 MODE_LABELS = {
     "hold": "Удержание",
@@ -87,7 +86,7 @@ class Tray:
             for key, label in MODE_LABELS.items()
         ]
         return pystray.Menu(
-            pystray.MenuItem("Стиль", pystray.Menu(*style_items)),
+            pystray.MenuItem("Обработка", pystray.Menu(*style_items)),
             pystray.MenuItem("Режим клавиши", pystray.Menu(*mode_items)),
             pystray.MenuItem("Настройки…", self._open_settings),
             pystray.MenuItem("Проверить обновление моделей…", self._check_updates),
@@ -102,7 +101,7 @@ class Tray:
             self._settings["style"] = key
             settings.save(self._settings)
             self._on_settings_changed()
-            logger.info("Стиль изменён на: %s", key)
+            logger.info("Обработка изменена на: %s", key)
 
         return setter
 
@@ -149,7 +148,7 @@ class Tray:
         self.icon.icon = _ICONS[state]
 
     def refresh_menu(self) -> None:
-        """Перечитать отметки в меню (стиль/режим), если их изменили извне (окно настроек)."""
+        """Перечитать отметки в меню (обработка/режим), если их изменили извне (окно настроек)."""
         self.icon.update_menu()
 
     def run_detached(self) -> None:

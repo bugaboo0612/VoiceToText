@@ -15,7 +15,7 @@ SETTINGS_FILE = DATA_DIR / "settings.json"
 
 DEFAULTS = {
     "hotkey_mode": "hold",  # "hold" (удержание) или "toggle" (переключение)
-    "style": "normal",  # "raw", "normal", "polite", "professional"
+    "style": "level2",  # обработка текста: "raw", "level1", "level2"
     "hotkey_vks": [0x78],  # коды клавиш сочетания, по умолчанию одна F9
     "microphone": None,  # название микрофона (по нему заново ищется устройство) или None
     "ollama_model": "qwen3:8b",
@@ -24,7 +24,8 @@ DEFAULTS = {
 }
 
 VALID_HOTKEY_MODES = ("hold", "toggle")
-VALID_STYLES = ("raw", "normal", "polite", "professional")
+# Прежние стили ("normal", "polite", "professional") сюда не входят и при чтении становятся "level2"
+VALID_STYLES = ("raw", "level1", "level2")
 
 _lock = threading.Lock()
 

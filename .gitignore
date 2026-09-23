@@ -4,3 +4,4 @@ __pycache__/
 models/
 *.onnx
 *.log
+check_prompts_result.txt

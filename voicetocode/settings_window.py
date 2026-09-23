@@ -13,9 +13,8 @@ logger = logging.getLogger(__name__)
 
 STYLE_LABELS = {
     "raw": "Без обработки",
-    "normal": "Обычный",
-    "polite": "Вежливый",
-    "professional": "Профессиональный",
+    "level1": "Уровень 1 — Чистка",
+    "level2": "Уровень 2 — Редактор",
 }
 MODE_LABELS = {
     "hold": "Удержание",
@@ -76,7 +75,7 @@ class SettingsWindow:
         self._build_window()
 
     def refresh(self) -> None:
-        """Подтягивает стиль и режим клавиши, если их изменили извне (меню трея)."""
+        """Подтягивает уровень обработки и режим клавиши, если их изменили извне (меню трея)."""
         if self.window is None or not self.window.winfo_exists():
             return
         self.mode_var.set(self.app_settings["hotkey_mode"])
@@ -109,8 +108,8 @@ class SettingsWindow:
                 side="left", padx=10, pady=4
             )
 
-        # --- Стиль по умолчанию ---
-        style_frame = ttk.LabelFrame(self.window, text="Стиль по умолчанию")
+        # --- Обработка текста по умолчанию ---
+        style_frame = ttk.LabelFrame(self.window, text="Обработка по умолчанию")
         style_frame.pack(fill="x", **pad)
         self.style_var = tk.StringVar(value=self.app_settings["style"])
         for key, label in STYLE_LABELS.items():
